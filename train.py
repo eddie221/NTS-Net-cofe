@@ -41,10 +41,10 @@ raw_optimizer = torch.optim.SGD(raw_parameters, lr=LR, momentum=0.9, weight_deca
 concat_optimizer = torch.optim.SGD(concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 part_optimizer = torch.optim.SGD(part_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 partcls_optimizer = torch.optim.SGD(partcls_parameters, lr=LR, momentum=0.9, weight_decay=WD)
-schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100], gamma=0.1),
-              MultiStepLR(concat_optimizer, milestones=[60, 100], gamma=0.1),
-              MultiStepLR(part_optimizer, milestones=[60, 100], gamma=0.1),
-              MultiStepLR(partcls_optimizer, milestones=[60, 100], gamma=0.1)]
+schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
+              MultiStepLR(concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
+              MultiStepLR(part_optimizer, milestones=[60, 100, 250], gamma=0.1),
+              MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1)]
 net = net.cuda()
 net = DataParallel(net)
 

@@ -117,6 +117,8 @@ class ResNet(nn.Module):
         self.attention_before3 = Attention_Module(128)
         self.attention_after3 = Attention_Module(9)
         
+        self.dropout = nn.Dropout(p = 0.5)
+        
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
@@ -165,7 +167,7 @@ class ResNet(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = torch.cat([x, x3_cofe], dim = 1)
-        x = nn.Dropout(p=0.5)(x)
+        x = self.dropout(x)
         feature2 = x
         x = self.fc(x)
 
