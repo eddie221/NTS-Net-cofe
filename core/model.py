@@ -38,7 +38,8 @@ class attention_net(nn.Module):
         self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
         self.proposal_net = ProposalNet()
         self.topN = topN
-        self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
+        #self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
+        self.concat_net = nn.Linear((2048 + 1024), 200)
         self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
@@ -70,10 +71,13 @@ class attention_net(nn.Module):
         _, _, part_features = self.pretrained_model(part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
-        part_feature = part_feature.view(batch, -1)
+        #part_feature = part_feature.view(batch, -1)
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_feature, feature], dim=1)
-        concat_logits = self.concat_net(concat_out)
+        concat_out = torch.cat([part_feature, feature.unsqueeze(1)], dim=1)
+        concat_out = torch.sum(concat_out, dim = 1) / (CAT_NUM + 1)
+        concat_logits = torch.log(concat_out)
+        #concat_logits = self.concat_net(concat_out)
+        
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)

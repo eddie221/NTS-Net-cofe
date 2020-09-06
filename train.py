@@ -29,7 +29,9 @@ if resume:
     ckpt = torch.load(resume)
     net.load_state_dict(ckpt['net_state_dict'])
     start_epoch = ckpt['epoch'] + 1
+    
 creterion = torch.nn.CrossEntropyLoss()
+creterion2 = torch.nn.NLLLoss()
 
 # define optimizers
 raw_parameters = list(net.pretrained_model.parameters())
@@ -67,7 +69,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
-        concat_loss = creterion(concat_logits, label)
+        concat_loss = creterion2(concat_logits, label)
         rank_loss = model.ranking_loss(top_n_prob, part_loss)
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
