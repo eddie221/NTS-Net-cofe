@@ -3,7 +3,7 @@ import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR
-from config import BATCH_SIZE, PROPOSAL_NUM, SAVE_FREQ, LR, WD, resume, save_dir
+from config import BATCH_SIZE, PROPOSAL_NUM, SAVE_FREQ, LR, WD, resume, save_dir, EPOCH
 from core import model, dataset
 from core.utils import init_log, progress_bar
 
@@ -48,9 +48,9 @@ schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
 net = net.cuda()
 net = DataParallel(net)
 
-for epoch in range(start_epoch, 500):
-    for scheduler in schedulers:
-        scheduler.step()
+VAL_MAX_ACC = 0.0
+print("save dir : {}".format(save_dir))
+for epoch in range(start_epoch, EPOCH + 1):
 
     # begin training
     _print('--' * 50)
@@ -135,8 +135,13 @@ for epoch in range(start_epoch, 500):
                 test_loss,
                 test_acc,
                 total))
+        
+    for scheduler in schedulers:
+        scheduler.step()
 
 	# save model
+    if test_acc > VAL_MAX_ACC or epoch == EPOCH:
+        VAL_MAX_ACC = test_acc
         net_state_dict = net.module.state_dict()
         if not os.path.exists(save_dir):
             os.mkdir(save_dir)
