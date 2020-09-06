@@ -1,5 +1,6 @@
 import numpy as np
 from config import INPUT_SIZE
+from functools import reduce
 
 _default_anchors_setting = (
     dict(layer='p3', stride=32, size=48, scale=[2 ** (1. / 3.), 2 ** (2. / 3.)], aspect_ratio=[0.667, 1, 1.5]),
@@ -56,7 +57,21 @@ def generate_default_anchor_maps(anchors_setting=None, input_shape=INPUT_SIZE):
                 center_anchors = np.concatenate((center_anchors, center_anchor_map.reshape(-1, 4)))
                 edge_anchors = np.concatenate((edge_anchors, edge_anchor_map.reshape(-1, 4)))
                 anchor_areas = np.concatenate((anchor_areas, anchor_area_map.reshape(-1)))
-    return center_anchors, edge_anchors, anchor_areas
+    
+    result1 = np.where(edge_anchors[:, 0] > 0)
+    result2 = np.where(input_shape[0] > edge_anchors[:, 0])
+    result3 = np.where(edge_anchors[:, 1] > 0)
+    result4 = np.where(input_shape[1] > edge_anchors[:, 1])
+    result5 = np.where(edge_anchors[:, 2] > 0)
+    result6 = np.where(input_shape[0] > edge_anchors[:, 2])
+    result7 = np.where(edge_anchors[:, 3] > 0)
+    result8 = np.where(input_shape[1] > edge_anchors[:, 3])
+    result = reduce(np.intersect1d, (result1, result2, result3, result4, result5, result6, result7,result8))
+    
+    center_anchors = center_anchors[result]
+    edge_anchors = edge_anchors[result]
+    anchor_areas = anchor_areas[result]
+    return center_anchors, edge_anchors, anchor_areas, result
 
 
 def hard_nms(cdds, topn=10, iou_thresh=0.25):

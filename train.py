@@ -51,9 +51,8 @@ net = net.cuda()
 net = DataParallel(net)
 
 VAL_MAX_ACC = 0.0
-print("save dir : {}".format(save_dir))
 for epoch in range(start_epoch, EPOCH + 1):
-
+    print("save dir : {}".format(save_dir))
     # begin training
     _print('--' * 50)
     net.train()
