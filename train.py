@@ -31,7 +31,6 @@ if resume:
     start_epoch = ckpt['epoch'] + 1
     
 creterion = torch.nn.CrossEntropyLoss()
-creterion2 = torch.nn.NLLLoss()
 
 # define optimizers
 raw_parameters = list(net.pretrained_model.parameters())
@@ -51,8 +50,9 @@ net = net.cuda()
 net = DataParallel(net)
 
 VAL_MAX_ACC = 0.0
+print("save dir : {}".format(save_dir))
 for epoch in range(start_epoch, EPOCH + 1):
-    print("save dir : {}".format(save_dir))
+
     # begin training
     _print('--' * 50)
     net.train()
@@ -68,7 +68,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
-        concat_loss = creterion2(concat_logits, label)
+        concat_loss = creterion(concat_logits, label)
         rank_loss = model.ranking_loss(top_n_prob, part_loss)
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))

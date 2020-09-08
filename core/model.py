@@ -74,9 +74,8 @@ class attention_net(nn.Module):
         #part_feature = part_feature.view(batch, -1)
         # concat_logits have the shape: B*200
         concat_out = torch.cat([part_feature, feature.unsqueeze(1)], dim=1)
-        concat_out = torch.sum(concat_out, dim = 1) / (CAT_NUM + 1)
-        concat_logits = torch.log(concat_out)
-        #concat_logits = self.concat_net(concat_out)
+        concat_out = self.concat_net(concat_out)
+        concat_logits = torch.sum(concat_out, dim = 1)
         
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200

@@ -117,7 +117,6 @@ class ResNet(nn.Module):
         self.attention_before3 = Attention_Module(128)
         self.attention_after3 = Attention_Module(9)
         
-        self.softmax = nn.Softmax(dim = 1)
         self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
@@ -172,7 +171,7 @@ class ResNet(nn.Module):
         feature2 = x
         x = self.fc(x)
 
-        return x, feature1, self.softmax(feature2)
+        return x, feature1, feature2
 
 
 def resnet18(pretrained=False, **kwargs):
