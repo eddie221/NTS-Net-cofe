@@ -35,13 +35,13 @@ class attention_net(nn.Module):
         super(attention_net, self).__init__()
         self.pretrained_model = resnet.resnet50(pretrained=True)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
+        self.pretrained_model.fc = nn.Linear(512 * 4 + 1024 * 2, 200)
         self.proposal_net = ProposalNet()
         self.topN = topN
-        #self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
-        self.concat_net = nn.Linear((2048 + 1024), 200)
-        self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
-        _, edge_anchors, _, self.edge_index = generate_default_anchor_maps()
+        self.concat_net = nn.Linear((2048 + 1024 * 2) * (CAT_NUM + 1), 200)
+        #self.concat_net = nn.Linear((2048 + 1024), 200)
+        self.partcls_net = nn.Linear(512 * 4 + 1024 * 2, 200)
+        _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
         self.edge_anchors = (edge_anchors + 224).astype(np.int)
 
@@ -50,7 +50,7 @@ class attention_net(nn.Module):
         x_pad = F.pad(x, (self.pad_side, self.pad_side, self.pad_side, self.pad_side), mode='constant', value=0)
         batch = x.size(0)
         # we will reshape rpn to shape: batch * nb_anchor
-        rpn_score = self.proposal_net(rpn_feature.detach())[:, self.edge_index]
+        rpn_score = self.proposal_net(rpn_feature.detach())
 
         all_cdds = [
             np.concatenate((x.reshape(-1, 1), self.edge_anchors.copy(), np.arange(0, len(x)).reshape(-1, 1)), axis=1)
@@ -71,11 +71,10 @@ class attention_net(nn.Module):
         _, _, part_features = self.pretrained_model(part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
-        #part_feature = part_feature.view(batch, -1)
+        part_feature = part_feature.view(batch, -1)
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_feature, feature.unsqueeze(1)], dim=1)
-        concat_out = self.concat_net(concat_out)
-        concat_logits = torch.sum(concat_out, dim = 1)
+        concat_out = torch.cat([part_feature, feature], dim=1)
+        concat_logits = self.concat_net(concat_out)
         
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200

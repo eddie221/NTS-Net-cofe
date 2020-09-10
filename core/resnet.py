@@ -117,6 +117,12 @@ class ResNet(nn.Module):
         self.attention_before3 = Attention_Module(128)
         self.attention_after3 = Attention_Module(9)
         
+        # cofe4
+        self.squeeze4 = nn.Conv2d(2048, 128, 1, bias = False)
+        self.cofe_linear4 = nn.Linear(128 * 128 * 9, 1024)
+        self.attention_before4 = Attention_Module(128)
+        self.attention_after4 = Attention_Module(9)
+        
         self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
@@ -155,6 +161,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x3 = x
         x = self.layer4(x)
+        x4 = x
         feature1 = x
         
         batch, channel, weight, height = x3.shape
@@ -164,9 +171,16 @@ class ResNet(nn.Module):
         x3_cofe = self.attention_after3(x3_cofe)
         x3_cofe = self.cofe_linear3(x3_cofe.reshape(batch, -1))
         
+        batch, channel, weight, height = x4.shape
+        x4_att = self.squeeze4(x4)
+        x4_att = self.attention_before4(x4_att)
+        x4_cofe = self.cofe_extractor(x4_att)
+        x4_cofe = self.attention_after4(x4_cofe)
+        x4_cofe = self.cofe_linear4(x4_cofe.reshape(batch, -1))
+        
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = torch.cat([x, x3_cofe], dim = 1)
+        x = torch.cat([x, x3_cofe, x4_cofe], dim = 1)
         x = self.dropout(x)
         feature2 = x
         x = self.fc(x)

@@ -7,5 +7,5 @@ WD = 1e-4
 SAVE_FREQ = 1
 resume = ''
 test_model = 'model.ckpt'
-save_dir = './20200908-1/'
+save_dir = './20200910-1/'
 EPOCH = 500

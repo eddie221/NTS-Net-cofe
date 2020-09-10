@@ -58,20 +58,22 @@ def generate_default_anchor_maps(anchors_setting=None, input_shape=INPUT_SIZE):
                 edge_anchors = np.concatenate((edge_anchors, edge_anchor_map.reshape(-1, 4)))
                 anchor_areas = np.concatenate((anchor_areas, anchor_area_map.reshape(-1)))
     
-    result1 = np.where(edge_anchors[:, 0] > 0)
-    result2 = np.where(input_shape[0] > edge_anchors[:, 0])
-    result3 = np.where(edge_anchors[:, 1] > 0)
-    result4 = np.where(input_shape[1] > edge_anchors[:, 1])
-    result5 = np.where(edge_anchors[:, 2] > 0)
-    result6 = np.where(input_shape[0] > edge_anchors[:, 2])
-    result7 = np.where(edge_anchors[:, 3] > 0)
-    result8 = np.where(input_shape[1] > edge_anchors[:, 3])
-    result = reduce(np.intersect1d, (result1, result2, result3, result4, result5, result6, result7,result8))
-    
-    center_anchors = center_anchors[result]
-    edge_anchors = edge_anchors[result]
-    anchor_areas = anchor_areas[result]
-    return center_anchors, edge_anchors, anchor_areas, result
+# =============================================================================
+#     result1 = np.where(edge_anchors[:, 0] > 0)
+#     result2 = np.where(input_shape[0] > edge_anchors[:, 0])
+#     result3 = np.where(edge_anchors[:, 1] > 0)
+#     result4 = np.where(input_shape[1] > edge_anchors[:, 1])
+#     result5 = np.where(edge_anchors[:, 2] > 0)
+#     result6 = np.where(input_shape[0] > edge_anchors[:, 2])
+#     result7 = np.where(edge_anchors[:, 3] > 0)
+#     result8 = np.where(input_shape[1] > edge_anchors[:, 3])
+#     result = reduce(np.intersect1d, (result1, result2, result3, result4, result5, result6, result7,result8))
+#     
+#     center_anchors = center_anchors[result]
+#     edge_anchors = edge_anchors[result]
+#     anchor_areas = anchor_areas[result]
+# =============================================================================
+    return center_anchors, edge_anchors, anchor_areas#, result
 
 
 def hard_nms(cdds, topn=10, iou_thresh=0.25):

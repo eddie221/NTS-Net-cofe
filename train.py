@@ -50,9 +50,8 @@ net = net.cuda()
 net = DataParallel(net)
 
 VAL_MAX_ACC = 0.0
-print("save dir : {}".format(save_dir))
 for epoch in range(start_epoch, EPOCH + 1):
-
+    print("save dir : {}".format(save_dir))
     # begin training
     _print('--' * 50)
     net.train()
@@ -104,7 +103,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         train_loss = train_loss / total
 
         _print(
-            'epoch:{} - train loss: {:.3f} and train acc: {:.3f} total sample: {}'.format(
+            'epoch:{} - train loss: {:.6f} and train acc: {:.6f} total sample: {}'.format(
                 epoch,
                 train_loss,
                 train_acc,
@@ -131,7 +130,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         test_acc = float(test_correct) / total
         test_loss = test_loss / total
         _print(
-            'epoch:{} - test loss: {:.3f} and test acc: {:.3f} total sample: {}'.format(
+            'epoch:{} - test loss: {:.6f} and test acc: {:.6f} total sample: {}'.format(
                 epoch,
                 test_loss,
                 test_acc,
@@ -153,6 +152,6 @@ for epoch in range(start_epoch, EPOCH + 1):
             'test_loss': test_loss,
             'test_acc': test_acc,
             'net_state_dict': net_state_dict},
-            os.path.join(save_dir, '%03d.ckpt' % epoch))
+            os.path.join(save_dir, '%03d_%.2f.ckpt' % (epoch, test_acc)))
 
 print('finishing training')
