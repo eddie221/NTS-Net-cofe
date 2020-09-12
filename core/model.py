@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from core import resnet
 import numpy as np
 from core.anchors import generate_default_anchor_maps, hard_nms
+from core.LSTM import LSTM
 from config import CAT_NUM, PROPOSAL_NUM
 
 
@@ -38,8 +39,9 @@ class attention_net(nn.Module):
         self.pretrained_model.fc = nn.Linear(512 * 4 + 1024 * 2, 200)
         self.proposal_net = ProposalNet()
         self.topN = topN
-        self.concat_net = nn.Linear((2048 + 1024 * 2) * (CAT_NUM + 1), 200)
+        #self.concat_net = nn.Linear((2048 + 1024 * 2) * (CAT_NUM + 1), 200)
         #self.concat_net = nn.Linear((2048 + 1024), 200)
+        self.concat_net = LSTM(2048 + 1024 * 2, 2048, 1)
         self.partcls_net = nn.Linear(512 * 4 + 1024 * 2, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
@@ -71,10 +73,11 @@ class attention_net(nn.Module):
         _, _, part_features = self.pretrained_model(part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
-        part_feature = part_feature.view(batch, -1)
+        #part_feature = part_feature.view(batch, -1)
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_feature, feature], dim=1)
-        concat_logits = self.concat_net(concat_out)
+        concat_out = torch.cat([part_feature, feature.unsqueeze(1)], dim=1)
+        concat_logits = self.concat_net(concat_out, (torch.zeros(x.shape[0], 1, 2048, requires_grad = True).cuda(),
+                                                     torch.zeros(x.shape[0], 1, 2048, requires_grad = True).cuda()))
         
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200

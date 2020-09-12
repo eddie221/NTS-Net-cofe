@@ -56,6 +56,7 @@ class LSTM(torch.nn.Module):
         self._lstm_cells = torch.nn.ModuleList(cells)
         self._nlayers = nlayers
         self._hidden_size = hidden_size
+        self.fc = torch.nn.Linear(hidden_size, 200)
     
     '''
         Input :
@@ -89,4 +90,10 @@ class LSTM(torch.nn.Module):
                 nhx.append(hidden_state)
                 ncx.append(cell_state)
         
-        return pre_h_state
+        return self.fc(pre_h_state[-1][:, -1])
+    
+if __name__ == "__main__":
+    lstm = LSTM(5, 2, 1)
+    lstm(torch.randn([1, 3, 5]), (torch.zeros([1, 1, 2]), torch.zeros([1, 1, 2])))
+    
+    
