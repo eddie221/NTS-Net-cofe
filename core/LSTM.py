@@ -94,6 +94,6 @@ class LSTM(torch.nn.Module):
     
 if __name__ == "__main__":
     lstm = LSTM(5, 2, 1)
-    lstm(torch.randn([1, 3, 5]), (torch.zeros([1, 1, 2]), torch.zeros([1, 1, 2])))
+    print(lstm(torch.randn([1, 3, 5]), (torch.zeros([1, 1, 2]), torch.zeros([1, 1, 2]))))
     
     
