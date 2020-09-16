@@ -2,7 +2,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
-from core import resnet
+from core import resnet, Unet
 import numpy as np
 from core.anchors import generate_default_anchor_maps, hard_nms
 from core.LSTM import LSTM
@@ -37,11 +37,14 @@ class attention_net(nn.Module):
         self.pretrained_model = resnet.resnet50(pretrained=True)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
+        
+        self.Unet = Unet.UNet(3, 3)
+        
         self.proposal_net = ProposalNet()
         self.topN = topN
-        #self.concat_net = nn.Linear((2048 + 1024 * 2) * (CAT_NUM + 1), 200)
+        self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
         #self.concat_net = nn.Linear((2048 + 1024), 200)
-        self.concat_net = LSTM(2048 + 1024, 2048, 1)
+        #self.concat_net = LSTM(2048 + 1024, 2048, 1)
         self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
@@ -70,19 +73,19 @@ class attention_net(nn.Module):
                 part_imgs[i:i + 1, j] = F.interpolate(x_pad[i:i + 1, :, y0:y1, x0:x1], size=(224, 224), mode='bilinear',
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
-        _, _, part_features = self.pretrained_model(part_imgs.detach())
+        u_part_imgs = self.Unet(part_imgs)
+        _, _, part_features = self.pretrained_model(u_part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
-        #part_feature = part_feature.view(batch, -1)
+        part_feature = part_feature.view(batch, -1)
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_feature, feature.unsqueeze(1)], dim=1)
-        concat_logits = self.concat_net(concat_out, (torch.zeros(x.shape[0], 1, 2048, requires_grad = True).cuda(),
-                                                     torch.zeros(x.shape[0], 1, 2048, requires_grad = True).cuda()))
+        concat_out = torch.cat([part_feature, feature], dim=1)
+        concat_logits = self.concat_net(concat_out)
         
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
-        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob]
+        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, part_imgs, u_part_imgs]
 
 
 def list_loss(logits, targets):

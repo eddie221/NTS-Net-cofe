@@ -109,13 +109,13 @@ class ResNet(nn.Module):
         self.avgpool = nn.AvgPool2d(7)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         
-        self.cofe_extractor = cofeature_fast(5, 1, 1)
+        self.cofe_extractor = cofeature_fast(3, 1, 1)
         
         # cofe3
         self.squeeze3 = nn.Conv2d(1024, 128, 1, bias = False)
-        self.cofe_linear3 = nn.Linear(128 * 128 * 9, 1024)
+        self.cofe_linear3 = nn.Linear(128 * 128 * 5, 1024)
         self.attention_before3 = Attention_Module(128)
-        self.attention_after3 = Attention_Module(9)
+        self.attention_after3 = Attention_Module(5)
         
 # =============================================================================
 #         # cofe4
@@ -163,7 +163,6 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x3 = x
         x = self.layer4(x)
-        x4 = x
         feature1 = x
         
         batch, channel, weight, height = x3.shape
