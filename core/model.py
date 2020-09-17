@@ -38,7 +38,7 @@ class attention_net(nn.Module):
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
         
-        self.Unet = Unet.UNet(3, 3)
+        self.Unet = Unet.UNet(3, 3, False)
         
         self.proposal_net = ProposalNet()
         self.topN = topN
@@ -73,7 +73,7 @@ class attention_net(nn.Module):
                 part_imgs[i:i + 1, j] = F.interpolate(x_pad[i:i + 1, :, y0:y1, x0:x1], size=(224, 224), mode='bilinear',
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
-        u_part_imgs = self.Unet(part_imgs)
+        u_part_imgs, history = self.Unet(part_imgs)
         _, _, part_features = self.pretrained_model(u_part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
@@ -85,7 +85,7 @@ class attention_net(nn.Module):
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
-        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, part_imgs, u_part_imgs]
+        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, part_imgs, u_part_imgs, history]
 
 
 def list_loss(logits, targets):

@@ -29,13 +29,16 @@ class UNet(nn.Module):
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
-        x = self.up1(x4, x3)
-        x = self.up2(x, x2)
-        x = self.up3(x, x1)
-        logits = self.outc(x)
-        return logits
+        x_up1 = self.up1(x4, x3)
+        x_up2 = self.up2(x_up1, x2)
+        x_up3 = self.up3(x_up2, x1)
+        logits = self.outc(x_up3)
+        return logits, [x1, x2, x3, x_up3, x_up2, x_up1]
 
 if __name__ == "__main__":
-    unet = UNet(1,1)
+    unet = UNet(1,1, False)
+    print(unet)
     a = torch.randn([1, 1, 224 ,224])
-    unet(a)
+    _, history = unet(a)
+    for item in history:
+        print(item.shape)
