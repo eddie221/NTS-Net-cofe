@@ -222,14 +222,15 @@ def resnet50(pretrained=False, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
-    params = torch.load("./pkl/resnet50.pth")
-    for name, param in params.items():
-        if name in model.state_dict():
-            try:
-                model.state_dict()[name].copy_(param)
-                print(name)
-            except:
-                print("{} can not load.".format(name))
+    if pretrained:
+        params = torch.load("./pkl/resnet50.pth")
+        for name, param in params.items():
+            if name in model.state_dict():
+                try:
+                    model.state_dict()[name].copy_(param)
+                    print(name)
+                except:
+                    print("{} can not load.".format(name))
     return model
 
 

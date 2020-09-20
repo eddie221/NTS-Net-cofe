@@ -2,8 +2,8 @@
 """ Full assembly of the parts to form the complete network """
 
 import torch.nn.functional as F
-
 from core.Unet_part import *
+import torch.nn as nn
 
 
 class UNet(nn.Module):
@@ -23,6 +23,37 @@ class UNet(nn.Module):
         self.up2 = Up(256, 128 // factor, bilinear)
         self.up3 = Up(128, 64, bilinear)
         self.outc = OutConv(64, n_classes)
+        
+        self.logits_d = nn.Conv2d(256, 128, 3, padding = 1)
+        self.logits_u = nn.Conv2d(64, 128, 3, padding = 1)
+        self.logits_all = nn.Conv2d(128 * 3, 200, 1)
+        
+        self.map = nn.Sequential(nn.Conv2d(512, 128, 3, padding = 1),
+                                 nn.BatchNorm2d(128),
+                                 nn.ReLU(),
+                                 nn.Conv2d(128, 1, 3, padding = 1))
+        
+        self.softmax = nn.Softmax(dim = 1)
+        
+        
+    def SAOL(self, x_mid, x1, x2, x3):
+        batch, channel, w, h = x2.shape
+        x_mid = F.interpolate(x_mid, size = x2.shape[2], mode = 'bilinear', align_corners = False)
+        x_map = self.map(x_mid).view(batch, -1)
+        x_map = self.softmax(x_map).view(batch, 1, w, h)
+        
+        x1 = F.interpolate(x1, size = x2.shape[2], mode = 'bilinear', align_corners = False)
+        x3 = F.interpolate(x3, size = x2.shape[2], mode = 'bilinear', align_corners = False)
+        x1 = self.logits_d(x1)
+        x3 = self.logits_u(x3)
+        
+        x_logits = torch.cat([x1, x2, x3], dim = 1)
+        x_logits = self.logits_all(x_logits)
+        x_logits = self.softmax(x_logits)
+        
+        spatial_logits = torch.sum(torch.sum(x_logits * x_map, dim = 2), dim = 2)
+        return spatial_logits
+        
 
     def forward(self, x):
         x1 = self.inc(x)
@@ -33,12 +64,15 @@ class UNet(nn.Module):
         x_up2 = self.up2(x_up1, x2)
         x_up3 = self.up3(x_up2, x1)
         logits = self.outc(x_up3)
-        return logits, [x1, x2, x3, x_up3, x_up2, x_up1]
+        
+        
+        return logits, [x1, x2, x3, x4, x_up3, x_up2, x_up1], self.SAOL(x4, x_up1, x_up2, x_up3)
 
 if __name__ == "__main__":
     unet = UNet(1,1, False)
-    print(unet)
     a = torch.randn([1, 1, 224 ,224])
     _, history = unet(a)
-    for item in history:
-        print(item.shape)
+# =============================================================================
+#     for item in history:
+#         print(item.shape)
+# =============================================================================
