@@ -35,26 +35,6 @@ class UNet(nn.Module):
         
         self.softmax = nn.Softmax(dim = 1)
         
-        
-    def SAOL(self, x_mid, x1, x2, x3):
-        batch, channel, w, h = x2.shape
-        x_mid = F.interpolate(x_mid, size = x2.shape[2], mode = 'bilinear', align_corners = False)
-        x_map = self.map(x_mid).view(batch, -1)
-        x_map = self.softmax(x_map).view(batch, 1, w, h)
-        
-        x1 = F.interpolate(x1, size = x2.shape[2], mode = 'bilinear', align_corners = False)
-        x3 = F.interpolate(x3, size = x2.shape[2], mode = 'bilinear', align_corners = False)
-        x1 = self.logits_d(x1)
-        x3 = self.logits_u(x3)
-        
-        x_logits = torch.cat([x1, x2, x3], dim = 1)
-        x_logits = self.logits_all(x_logits)
-        x_logits = self.softmax(x_logits)
-        
-        spatial_logits = torch.sum(torch.sum(x_logits * x_map, dim = 2), dim = 2)
-        return spatial_logits
-        
-
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)
@@ -65,8 +45,7 @@ class UNet(nn.Module):
         x_up3 = self.up3(x_up2, x1)
         logits = self.outc(x_up3)
         
-        
-        return logits, [x1, x2, x3, x4, x_up3, x_up2, x_up1], self.SAOL(x4, x_up1, x_up2, x_up3)
+        return logits, [x1, x2, x3, x4, x_up3, x_up2, x_up1]
 
 if __name__ == "__main__":
     unet = UNet(1,1, False)

@@ -31,9 +31,9 @@ class ProposalNet(nn.Module):
 
 
 class attention_net(nn.Module):
-    def __init__(self, topN=4):
+    def __init__(self, topN=4, pretrained = True):
         super(attention_net, self).__init__()
-        self.pretrained_model = resnet.resnet50(pretrained=True)
+        self.pretrained_model = resnet.resnet50(pretrained=pretrained)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
         
@@ -77,7 +77,7 @@ class attention_net(nn.Module):
                 part_imgs[i:i + 1, j] = F.interpolate(x_pad[i:i + 1, :, y0:y1, x0:x1], size=(224, 224), mode='bilinear',
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
-        u_part_imgs, history, spatial_logits = self.Unet(part_imgs)
+        u_part_imgs, history = self.Unet(part_imgs)
         
         _, _, part_features = self.pretrained_model(u_part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
@@ -91,7 +91,7 @@ class attention_net(nn.Module):
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
-        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, part_imgs, u_part_imgs, history, spatial_logits]
+        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, part_imgs, u_part_imgs, history]
 
 
 def list_loss(logits, targets):
