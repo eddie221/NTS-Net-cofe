@@ -7,5 +7,5 @@ WD = 1e-4
 SAVE_FREQ = 1
 resume = ''
 test_model = './pkl/20200917-1/20200917_223717/164_0.88.ckpt'
-save_dir = './20200921-1/'
+save_dir = './20200923-1/'
 EPOCH = 500

@@ -117,6 +117,17 @@ class ResNet(nn.Module):
         self.attention_before3 = Attention_Module(128)
         self.attention_after3 = Attention_Module(5)
         
+        self.spatial_map = nn.Sequential(nn.Conv2d(2048, 512, 3, padding = 1),
+                                         nn.BatchNorm2d(512),
+                                         nn.ReLU(),
+                                         nn.Conv2d(512, 1, 3, padding = 1))
+        self.spatial_logits_1 = nn.Conv2d(512, 1024, 1)
+        self.spatial_logits_2 = nn.Conv2d(2048, 1024, 1)
+        self.spatial_logtis_all = nn.Sequential(nn.BatchNorm2d(1024 * 3),
+                                                nn.Conv2d(1024 * 3, 200, 3, padding = 1),
+                                                )
+        self.softmax = nn.Softmax(dim = 1)
+        
         #self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
@@ -143,6 +154,26 @@ class ResNet(nn.Module):
             layers.append(block(self.inplanes, planes))
 
         return nn.Sequential(*layers)
+    
+    def SAOL(self, x3, x4, x5):
+        batch, channel, width, height = x4.shape
+        x3 = torch.nn.functional.interpolate(x3, size = x4.shape[2], mode = 'bilinear', align_corners = False)
+        x5 = torch.nn.functional.interpolate(x5, size = x4.shape[2], mode = 'bilinear', align_corners = False)
+        
+        spatial_map = self.spatial_map(x5).view(batch, -1)
+        spatial_map = self.softmax(spatial_map).view(batch, 1, width, height)
+        
+        spatial_logits_3 = self.spatial_logits_1(x3)
+        spatial_logits_5 = self.spatial_logits_2(x5)
+        
+        spatial_logits = torch.cat([spatial_logits_3, x4, spatial_logits_5], dim = 1)
+        spatial_logits = self.spatial_logtis_all(spatial_logits)
+        spatial_logits = self.softmax(spatial_logits)
+        
+        logits = torch.sum((spatial_map * spatial_logits).view(batch, -1, width * height), dim = 2)
+        
+        return logits
+        
 
     def forward(self, x):
         x = self.conv1(x)
@@ -152,9 +183,11 @@ class ResNet(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
+        x2 = x
         x = self.layer3(x)
         x3 = x
         x = self.layer4(x)
+        x4 = x
         feature1 = x
         
         batch, channel, weight, height = x3.shape
@@ -171,7 +204,7 @@ class ResNet(nn.Module):
         feature2 = x
         x = self.fc(x)
 
-        return x, feature1, feature2
+        return x, feature1, feature2, self.SAOL(x2, x3, x4)
 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
