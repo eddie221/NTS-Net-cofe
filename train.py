@@ -39,18 +39,15 @@ raw_parameters = list(net.pretrained_model.parameters())
 part_parameters = list(net.proposal_net.parameters())
 concat_parameters = list(net.concat_net.parameters())
 partcls_parameters = list(net.partcls_net.parameters())
-unet_parameters = list(net.Unet.parameters())
 
 raw_optimizer = torch.optim.SGD(raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 concat_optimizer = torch.optim.SGD(concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 part_optimizer = torch.optim.SGD(part_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 partcls_optimizer = torch.optim.SGD(partcls_parameters, lr=LR, momentum=0.9, weight_decay=WD)
-unet_optimizer = torch.optim.SGD(unet_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(part_optimizer, milestones=[60, 100, 250], gamma=0.1),
-              MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1),
-              MultiStepLR(unet_optimizer, milestones=[60, 100, 250], gamma=0.1)]
+              MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1)]
 
 net = net.cuda()
 net = DataParallel(net)
@@ -68,9 +65,8 @@ for epoch in range(start_epoch, EPOCH + 1):
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
-        unet_optimizer.zero_grad()
 
-        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, u_part_img, history, main_spatial, part_spatial = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, main_spatial, part_spatial = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -78,18 +74,16 @@ for epoch in range(start_epoch, EPOCH + 1):
         rank_loss = model.ranking_loss(top_n_prob, part_loss)
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
-        unet_loss = creterion2(u_part_img, part_img) + creterion2(history[0], history[4]) + creterion2(history[1], history[5]) + creterion2(history[2], history[6])
         
         main_spatial_loss = creterion3(raw_logits, main_spatial)
         part_spatial_loss = creterion3(part_logits.view(batch_size * PROPOSAL_NUM, -1), part_spatial)
         
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + unet_loss + main_spatial_loss + part_spatial_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + main_spatial_loss + part_spatial_loss
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
         concat_optimizer.step()
         partcls_optimizer.step()
-        unet_optimizer.step()
         progress_bar(i, len(trainloader), 'train')
 
     if epoch % SAVE_FREQ == 0:
@@ -101,7 +95,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
@@ -129,7 +123,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
