@@ -35,16 +35,16 @@ class attention_net(nn.Module):
         super(attention_net, self).__init__()
         self.pretrained_model = resnet.resnet50(pretrained=pretrained)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
+        self.pretrained_model.fc = nn.Linear(512 * 4, 200)
         
         self.Unet = Unet.UNet(3, 3, False)
         
         self.proposal_net = ProposalNet()
         self.topN = topN
-        self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
+        self.concat_net = nn.Linear((2048) * (CAT_NUM + 1), 200)
         #self.concat_net = nn.Linear((2048 + 1024), 200)
         #self.concat_net = LSTM(2048 + 1024, 2048, 1)
-        self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
+        self.partcls_net = nn.Linear(512 * 4, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
         self.edge_anchors = (edge_anchors + 224).astype(np.int)

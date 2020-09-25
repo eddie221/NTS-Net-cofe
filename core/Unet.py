@@ -24,17 +24,6 @@ class UNet(nn.Module):
         self.up3 = Up(128, 64, bilinear)
         self.outc = OutConv(64, n_classes)
         
-        self.logits_d = nn.Conv2d(256, 128, 3, padding = 1)
-        self.logits_u = nn.Conv2d(64, 128, 3, padding = 1)
-        self.logits_all = nn.Conv2d(128 * 3, 200, 1)
-        
-        self.map = nn.Sequential(nn.Conv2d(512, 128, 3, padding = 1),
-                                 nn.BatchNorm2d(128),
-                                 nn.ReLU(),
-                                 nn.Conv2d(128, 1, 3, padding = 1))
-        
-        self.softmax = nn.Softmax(dim = 1)
-        
     def forward(self, x):
         x1 = self.inc(x)
         x2 = self.down1(x1)

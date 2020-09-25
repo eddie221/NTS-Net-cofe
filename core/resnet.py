@@ -112,10 +112,12 @@ class ResNet(nn.Module):
         self.cofe_extractor = cofeature_fast(3, 1, 1)
         
         # cofe3
-        self.squeeze3 = nn.Conv2d(1024, 128, 1, bias = False)
-        self.cofe_linear3 = nn.Linear(128 * 128 * 5, 1024)
-        self.attention_before3 = Attention_Module(128)
-        self.attention_after3 = Attention_Module(5)
+# =============================================================================
+#         self.squeeze3 = nn.Conv2d(1024, 128, 1, bias = False)
+#         self.cofe_linear3 = nn.Linear(128 * 128 * 5, 1024)
+#         self.attention_before3 = Attention_Module(128)
+#         self.attention_after3 = Attention_Module(5)
+# =============================================================================
         
         self.spatial_map = nn.Sequential(nn.Conv2d(2048, 512, 3, padding = 1),
                                          nn.BatchNorm2d(512),
@@ -128,7 +130,7 @@ class ResNet(nn.Module):
                                                 )
         self.softmax = nn.Softmax(dim = 1)
         
-        #self.dropout = nn.Dropout(p = 0.5)
+        self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -190,17 +192,19 @@ class ResNet(nn.Module):
         x4 = x
         feature1 = x
         
-        batch, channel, weight, height = x3.shape
-        x3_att = self.squeeze3(x3)
-        x3_att = self.attention_before3(x3_att)
-        x3_cofe = self.cofe_extractor(x3_att)
-        x3_cofe = self.attention_after3(x3_cofe)
-        x3_cofe = self.cofe_linear3(x3_cofe.reshape(batch, -1))
+# =============================================================================
+#         batch, channel, weight, height = x3.shape
+#         x3_att = self.squeeze3(x3)
+#         x3_att = self.attention_before3(x3_att)
+#         x3_cofe = self.cofe_extractor(x3_att)
+#         x3_cofe = self.attention_after3(x3_cofe)
+#         x3_cofe = self.cofe_linear3(x3_cofe.reshape(batch, -1))
+# =============================================================================
         
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = torch.cat([x, x3_cofe], dim = 1)
-        #x = self.dropout(x)
+        #x = torch.cat([x, x3_cofe], dim = 1)
+        x = self.dropout(x)
         feature2 = x
         x = self.fc(x)
 
