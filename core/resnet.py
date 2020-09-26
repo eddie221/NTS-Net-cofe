@@ -169,12 +169,12 @@ class ResNet(nn.Module):
         spatial_logits_5 = self.spatial_logits_2(x5)
         
         spatial_logits = torch.cat([spatial_logits_3, x4, spatial_logits_5], dim = 1)
-        spatial_logits = self.spatial_logtis_all(spatial_logits)
-        spatial_logits = self.softmax(spatial_logits)
+        spatial_logits_all = self.spatial_logtis_all(spatial_logits)
+        spatial_logits_all = self.softmax(spatial_logits_all)
         
-        logits = torch.sum((spatial_map * spatial_logits).view(batch, -1, width * height), dim = 2)
-        
-        return logits
+        logits_feature = torch.sum((spatial_map * spatial_logits).view(batch, -1, width * height), dim = 2)
+        logits = torch.sum((spatial_map * spatial_logits_all).view(batch, -1, width * height), dim = 2)
+        return logits_feature, logits
         
 
     def forward(self, x):
@@ -205,10 +205,9 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         #x = torch.cat([x, x3_cofe], dim = 1)
         x = self.dropout(x)
-        feature2 = x
         x = self.fc(x)
-
-        return x, feature1, feature2, self.SAOL(x2, x3, x4)
+        logits_feature, logits = self.SAOL(x2, x3, x4)
+        return x, feature1, logits_feature, logits
 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.

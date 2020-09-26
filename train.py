@@ -30,27 +30,25 @@ if resume:
     net.load_state_dict(ckpt['net_state_dict'])
     start_epoch = ckpt['epoch'] + 1
     
-creterion = torch.nn.CrossEntropyLoss()
+creterion = torch.nn.NLLLoss()
 creterion2 = torch.nn.MSELoss()
-creterion3 = torch.nn.KLDivLoss()
+creterion3 = torch.nn.KLDivLoss(reduction = 'batchmean')
 
 # define optimizers
 raw_parameters = list(net.pretrained_model.parameters())
 part_parameters = list(net.proposal_net.parameters())
 concat_parameters = list(net.concat_net.parameters())
-spatial_concat_parameters = list(net.spatial_concat_net.parameters())
 partcls_parameters = list(net.partcls_net.parameters())
 
 raw_optimizer = torch.optim.SGD(raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 concat_optimizer = torch.optim.SGD(concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
-spatial_concat_optimizer = torch.optim.SGD(spatial_concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 part_optimizer = torch.optim.SGD(part_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 partcls_optimizer = torch.optim.SGD(partcls_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
-              MultiStepLR(spatial_concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(part_optimizer, milestones=[60, 100, 250], gamma=0.1),
-              MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1)]
+              MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1)
+              ]
 
 net = net.cuda()
 net = DataParallel(net)
@@ -67,10 +65,9 @@ for epoch in range(start_epoch, EPOCH + 1):
         raw_optimizer.zero_grad()
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
-        spatial_concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
 
-        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, main_spatial, part_spatial = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, spatial_logits, part_spatial_logits = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -79,15 +76,18 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        main_spatial_loss = creterion3(raw_logits, main_spatial)
-        part_spatial_loss = creterion3(part_logits.view(batch_size * PROPOSAL_NUM, -1), part_spatial)
+        main_spatial_kl_loss = creterion3(raw_logits, spatial_logits)
+        part_spatial_kl_loss = creterion3(part_logits.view(batch_size * PROPOSAL_NUM, -1), part_spatial_logits)
         
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + main_spatial_loss + part_spatial_loss
+        # SL loss
+        main_spatial_loss = creterion(spatial_logits, label)
+        part_spatial_loss = creterion(part_spatial_logits, label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
+        
+        total_loss = raw_loss * 0.5 + rank_loss + concat_loss + partcls_loss * 0.5 + main_spatial_loss + part_spatial_loss + main_spatial_kl_loss + part_spatial_kl_loss
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
         concat_optimizer.step()
-        spatial_concat_optimizer.step()
         partcls_optimizer.step()
         progress_bar(i, len(trainloader), 'train')
 
