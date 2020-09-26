@@ -38,14 +38,17 @@ creterion3 = torch.nn.KLDivLoss()
 raw_parameters = list(net.pretrained_model.parameters())
 part_parameters = list(net.proposal_net.parameters())
 concat_parameters = list(net.concat_net.parameters())
+spatial_concat_parameters = list(net.spatial_concat_net.parameters())
 partcls_parameters = list(net.partcls_net.parameters())
 
 raw_optimizer = torch.optim.SGD(raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 concat_optimizer = torch.optim.SGD(concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
+spatial_concat_optimizer = torch.optim.SGD(spatial_concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 part_optimizer = torch.optim.SGD(part_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 partcls_optimizer = torch.optim.SGD(partcls_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
+              MultiStepLR(spatial_concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(part_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1)]
 
@@ -64,6 +67,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         raw_optimizer.zero_grad()
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
+        spatial_concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
 
         raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, main_spatial, part_spatial = net(img)
@@ -83,6 +87,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         raw_optimizer.step()
         part_optimizer.step()
         concat_optimizer.step()
+        spatial_concat_optimizer.step()
         partcls_optimizer.step()
         progress_bar(i, len(trainloader), 'train')
 
