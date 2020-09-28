@@ -76,13 +76,15 @@ class attention_net(nn.Module):
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
         
-        _, _, part_spatial_features, part_spatial_logits = self.pretrained_model(part_imgs.detach())
+        part_raw_logits, _, part_spatial_features, part_spatial_logits = self.pretrained_model(part_imgs.detach())
+        part_spatial_logits = part_spatial_logits.view(batch, self.topN, -1)
+        
         part_spatial_features = part_spatial_features.view(batch, self.topN, -1)
         part_spatial_features = part_spatial_features[:, :CAT_NUM, ...].contiguous()
         part_spatial_features = part_spatial_features.view(batch, -1)
         
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_spatial_features, spatial_features], dim=1)
+        concat_out = torch.cat([part_spatial_features, spatial_features], dim = 1)
         concat_logits = self.concat_net(concat_out)
         
         raw_logits = resnet_out
@@ -90,12 +92,14 @@ class attention_net(nn.Module):
         part_spatial_features = self.partcls_net(part_spatial_features.view(batch, self.topN, -1))
         return [F.log_softmax(raw_logits, dim = 1),
                 F.log_softmax(concat_logits, dim = 1),
-                F.log_softmax(part_spatial_features, dim = 1),
+                F.log_softmax(part_spatial_features, dim = 2),
                 top_n_index,
                 top_n_prob,
                 part_imgs,
                 F.log_softmax(spatial_logits, dim = 1), 
-                F.log_softmax(part_spatial_logits, dim = 1)]
+                F.softmax(raw_logits, dim = 1),
+                F.log_softmax(part_spatial_logits, dim = 2),
+                F.softmax(part_raw_logits, dim = 1)]
 
 
 def list_loss(logits, targets):

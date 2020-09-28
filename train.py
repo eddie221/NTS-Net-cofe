@@ -67,7 +67,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
 
-        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, spatial_logits, part_spatial_logits = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, spatial_logits, spatial_target, part_spatial_logits, part_spatial_target = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -76,14 +76,15 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        main_spatial_kl_loss = creterion3(raw_logits, spatial_logits)
-        part_spatial_kl_loss = creterion3(part_logits.view(batch_size * PROPOSAL_NUM, -1), part_spatial_logits)
+        # KL loss
+        main_spatial_kl_loss = creterion3(spatial_logits, spatial_target)
+        part_spatial_kl_loss = creterion3(part_spatial_logits.view(batch_size * PROPOSAL_NUM, -1), part_spatial_target.view(batch_size * PROPOSAL_NUM, -1))
         
         # SL loss
         main_spatial_loss = creterion(spatial_logits, label)
-        part_spatial_loss = creterion(part_spatial_logits, label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
+        part_spatial_loss = creterion(part_spatial_logits.view(batch_size * PROPOSAL_NUM, -1), label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        total_loss = raw_loss * 0.5 + rank_loss + concat_loss + partcls_loss * 0.5 + main_spatial_loss + part_spatial_loss + main_spatial_kl_loss + part_spatial_kl_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + main_spatial_loss + part_spatial_loss + main_spatial_kl_loss + part_spatial_kl_loss
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
@@ -100,7 +101,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
@@ -128,7 +129,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
