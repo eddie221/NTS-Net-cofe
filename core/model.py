@@ -42,7 +42,7 @@ class attention_net(nn.Module):
         self.concat_net = nn.Linear((1024 * 3) * (CAT_NUM + 1), 200)
         #self.concat_net = nn.Linear((2048 + 1024), 200)
         #self.concat_net = LSTM(2048 + 1024, 2048, 1)
-        self.partcls_net = nn.Linear(512 * 4, 200)
+        self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
         self.edge_anchors = (edge_anchors + 224).astype(np.int)
@@ -53,7 +53,7 @@ class attention_net(nn.Module):
             device = 'cpu'
         else:
             device = x.get_device()
-        resnet_out, rpn_feature, spatial_features, spatial_logits = self.pretrained_model(x)
+        resnet_out, rpn_feature, feature, main_spatial = self.pretrained_model(x)
         x_pad = F.pad(x, (self.pad_side, self.pad_side, self.pad_side, self.pad_side), mode='constant', value=0)
         batch = x.size(0)
         # we will reshape rpn to shape: batch * nb_anchor
@@ -76,30 +76,24 @@ class attention_net(nn.Module):
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
         
-        part_raw_logits, _, part_spatial_features, part_spatial_logits = self.pretrained_model(part_imgs.detach())
-        part_spatial_logits = part_spatial_logits.view(batch, self.topN, -1)
-        
-        part_spatial_features = part_spatial_features.view(batch, self.topN, -1)
-        part_spatial_features = part_spatial_features[:, :CAT_NUM, ...].contiguous()
-        part_spatial_features = part_spatial_features.view(batch, -1)
+        _, _, part_features, part_spatial = self.pretrained_model(part_imgs.detach())
+        part_feature = part_features.view(batch, self.topN, -1)
+        part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
+        part_feature = part_feature.view(batch, -1)
         
         # concat_logits have the shape: B*200
-        concat_out = torch.cat([part_spatial_features, spatial_features], dim = 1)
+        concat_out = torch.cat([part_feature, feature], dim=1)
         concat_logits = self.concat_net(concat_out)
         
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
-        part_spatial_features = self.partcls_net(part_spatial_features.view(batch, self.topN, -1))
+        part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
         return [F.log_softmax(raw_logits, dim = 1),
                 F.log_softmax(concat_logits, dim = 1),
-                F.log_softmax(part_spatial_features, dim = 2),
-                top_n_index,
-                top_n_prob,
-                part_imgs,
-                F.log_softmax(spatial_logits, dim = 1), 
-                F.softmax(raw_logits, dim = 1),
-                F.log_softmax(part_spatial_logits, dim = 2),
-                F.softmax(part_raw_logits, dim = 1)]
+                F.log_softmax(part_logits, dim = 2),
+                top_n_index, top_n_prob, part_imgs,
+                F.log_softmax(main_spatial, dim = 1), F.softmax(raw_logits, dim = 1),
+                F.log_softmax(part_spatial, dim = 1), F.softmax(part_logits, dim = 2)]
 
 
 def list_loss(logits, targets):

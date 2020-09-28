@@ -206,8 +206,10 @@ class ResNet(nn.Module):
         #x = torch.cat([x, x3_cofe], dim = 1)
         x = self.dropout(x)
         x = self.fc(x)
-        logits_feature, logits = self.SAOL(x2, x3, x4)
-        return x, feature1, logits_feature, logits
+        
+        feature2, logits = self.SAOL(x2, x3, x4)
+
+        return x, feature1, feature2, logits
 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.
