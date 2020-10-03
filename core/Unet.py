@@ -34,7 +34,7 @@ class UNet(nn.Module):
         x_up3 = self.up3(x_up2, x1)
         logits = self.outc(x_up3)
         
-        return logits, [x1, x2, x3, x4, x_up3, x_up2, x_up1]
+        return [x, x1, x2, x3, x4, x_up1, x_up2, x_up3, logits]
 
 if __name__ == "__main__":
     unet = UNet(1,1, False)

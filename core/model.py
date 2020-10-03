@@ -36,6 +36,8 @@ class attention_net(nn.Module):
         self.pretrained_model = resnet.resnet50(pretrained=pretrained)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Linear(512 * 4, 200)
+
+        self.unet = Unet.UNet(3, 3, False)
         
         self.proposal_net = ProposalNet()
         self.topN = topN
@@ -76,7 +78,9 @@ class attention_net(nn.Module):
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
         
-        _, _, part_features, part_spatial = self.pretrained_model(part_imgs.detach())
+        history = self.unet(part_imgs)
+        
+        _, _, part_features, part_spatial = self.pretrained_model(history[-1].detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
         part_feature = part_feature.view(batch, -1)
@@ -93,7 +97,8 @@ class attention_net(nn.Module):
                 F.log_softmax(part_logits, dim = 2),
                 top_n_index, top_n_prob, part_imgs,
                 F.log_softmax(main_spatial, dim = 1), F.softmax(raw_logits, dim = 1),
-                F.log_softmax(part_spatial, dim = 1), F.softmax(part_logits, dim = 2)]
+                F.log_softmax(part_spatial, dim = 1), F.softmax(part_logits, dim = 2),
+                history]
 
 
 def list_loss(logits, targets):
