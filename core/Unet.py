@@ -37,10 +37,8 @@ class UNet(nn.Module):
         return [x, x1, x2, x3, x4, x_up1, x_up2, x_up3, logits]
 
 if __name__ == "__main__":
-    unet = UNet(1,1, False)
+    unet = UNet(1,1, True)
     a = torch.randn([1, 1, 224 ,224])
-    _, history = unet(a)
-# =============================================================================
-#     for item in history:
-#         print(item.shape)
-# =============================================================================
+    history = unet(a)
+    for item in history:
+        print(item.shape)

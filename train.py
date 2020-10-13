@@ -30,7 +30,7 @@ if resume:
     net.load_state_dict(ckpt['net_state_dict'])
     start_epoch = ckpt['epoch'] + 1
     
-creterion = torch.nn.NLLLoss()
+creterion = torch.nn.CrossEntropyLoss()
 creterion2 = torch.nn.MSELoss()
 creterion3 = torch.nn.KLDivLoss()
 
@@ -39,18 +39,18 @@ raw_parameters = list(net.pretrained_model.parameters())
 part_parameters = list(net.proposal_net.parameters())
 concat_parameters = list(net.concat_net.parameters())
 partcls_parameters = list(net.partcls_net.parameters())
-unet_parameters = list(net.unet.parameters())
+encoder_parameters = list(net.encoder.parameters())
 
 raw_optimizer = torch.optim.SGD(raw_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 concat_optimizer = torch.optim.SGD(concat_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 part_optimizer = torch.optim.SGD(part_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 partcls_optimizer = torch.optim.SGD(partcls_parameters, lr=LR, momentum=0.9, weight_decay=WD)
-unet_optimizer = torch.optim.SGD(unet_parameters, lr=LR, momentum=0.9, weight_decay=WD)
+encoder_optimizer = torch.optim.SGD(encoder_parameters, lr=LR, momentum=0.9, weight_decay=WD)
 schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(concat_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(part_optimizer, milestones=[60, 100, 250], gamma=0.1),
               MultiStepLR(partcls_optimizer, milestones=[60, 100, 250], gamma=0.1),
-              MultiStepLR(unet_optimizer, milestones=[60, 100, 250], gamma=0.1)]
+              MultiStepLR(encoder_optimizer, milestones=[60, 100, 250], gamma=0.1)]
 
 net = net.cuda()
 net = DataParallel(net)
@@ -68,9 +68,9 @@ for epoch in range(start_epoch, EPOCH + 1):
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
-        unet_optimizer.zero_grad()
+        encoder_optimizer.zero_grad()
 
-        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, main_spatial, main_spatial_t, part_spatial, part_spatial_t, history = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, p_mask, p_mask_l = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -79,28 +79,16 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        # Unet loss
-        unet_loss = creterion2(history[8],history[0]) + creterion2(history[7],history[1]) + creterion2(history[6],history[2]) + \
-            creterion2(history[5],history[3])
+        encoder_loss = creterion2(p_mask, p_mask_l)
         
-        # SL loss
-        main_spatial_loss = creterion(main_spatial, label)
-        part_spatial_loss = creterion(part_spatial, label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
-        
-        # SD loss
-        main_spatial_kl_loss = creterion3(main_spatial, main_spatial_t)
-        part_spatial_kl_loss = creterion3(part_spatial, part_spatial_t.view(batch_size * PROPOSAL_NUM, -1))
-        
-        total_loss = raw_loss + rank_loss + concat_loss +\
-            partcls_loss + main_spatial_loss + part_spatial_loss + main_spatial_kl_loss + part_spatial_kl_loss +\
-            unet_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + encoder_loss
             
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
         concat_optimizer.step()
         partcls_optimizer.step()
-        unet_optimizer.step()
+        encoder_optimizer.step()
         
         progress_bar(i, len(trainloader), 'train')
 
@@ -113,7 +101,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
@@ -141,7 +129,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
