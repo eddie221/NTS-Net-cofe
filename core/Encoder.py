@@ -48,9 +48,9 @@ class Encoder(nn.Module):
     def __init__(self, in_cha):
         super(Encoder, self).__init__()
         self.inc = DoubleConv(in_cha, 64)
-        self.conv1 = Down(64, 128)
-        self.conv2 = Down(128, 256)
-        self.conv3 = Down(256, 512)
+        self.conv1 = Down(64, 256)
+        self.conv2 = Down(256, 512)
+        self.conv3 = Down(512, 2048)
         
     def forward(self, x):
         B, C, H, W = x.size()
