@@ -94,10 +94,11 @@ class attention_net(nn.Module):
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
         
         with torch.no_grad():
-            prf_mean = torch.mean(part_rpn_features, dim = 1, keepdim = True)
+            prf_mean = torch.mean(rpn_feature, dim = 1, keepdim = True)
             prf_threshold = torch.mean(prf_mean.view(prf_mean.size(0), prf_mean.size(1), -1), dim = 2, keepdim = True).unsqueeze(3)
             prf_mean = F.interpolate(prf_mean, size = (224, 224), mode = 'bilinear', align_corners = True)
             prf_mask = (prf_mean > prf_threshold).float()
+            prf_mask = prf_mask.repeat_interleave(self.topN, dim = 0)
         
         return [raw_logits,
                 concat_logits,
