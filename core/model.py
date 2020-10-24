@@ -37,8 +37,6 @@ class attention_net(nn.Module):
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
         self.pretrained_model.fc = nn.Linear(512 * 4, 200)
 
-        self.encoder = Encoder.Encoder(3)
-        
         self.proposal_net = ProposalNet()
         self.topN = topN
         self.concat_net = nn.Linear(2048 * (CAT_NUM + 1), 200)
@@ -55,7 +53,7 @@ class attention_net(nn.Module):
             device = 'cpu'
         else:
             device = x.get_device()
-        resnet_out, rpn_feature, feature = self.pretrained_model(x)
+        resnet_out, rpn_feature, feature, cam, cam_refined = self.pretrained_model(x)
         x_pad = F.pad(x, (self.pad_side, self.pad_side, self.pad_side, self.pad_side), mode='constant', value=0)
         batch = x.size(0)
         # we will reshape rpn to shape: batch * nb_anchor
@@ -71,16 +69,33 @@ class attention_net(nn.Module):
         top_n_index = torch.from_numpy(top_n_index).to(device)
         top_n_prob = torch.gather(rpn_score, dim=1, index=top_n_index)
         part_imgs = torch.zeros([batch, self.topN, 3, 224, 224]).to(device)
+        part_cam_imgs = torch.zeros([batch, self.topN, 2, 224, 224]).to(device)
+        part_cam_refined_imgs = torch.zeros([batch, self.topN, 2, 224, 224]).to(device)
+        cam_pad = F.pad(cam, (self.pad_side // 2, self.pad_side // 2, self.pad_side // 2, self.pad_side // 2), mode='constant', value=0)
+        cam_refined_pad = F.pad(cam_refined, (self.pad_side // 2, self.pad_side // 2, self.pad_side // 2, self.pad_side // 2), mode='constant', value=0)
+        
         for i in range(batch):
             for j in range(self.topN):
                 [y0, x0, y1, x1] = top_n_cdds[i][j, 1:5].astype(np.int)
                 part_imgs[i:i + 1, j] = F.interpolate(x_pad[i:i + 1, :, y0:y1, x0:x1], size=(224, 224), mode='bilinear',
                                                       align_corners=True)
+                part_cam_imgs[i:i + 1, j] = F.interpolate(cam_pad[i:i + 1, :, y0 // 2:y1 // 2, x0 // 2:x1 // 2], size=(224, 224), mode='bilinear',
+                                                      align_corners=True)
+                part_cam_refined_imgs[i:i + 1, j] = F.interpolate(cam_refined_pad[i:i + 1, :, y0 // 2:y1 // 2, x0 // 2:x1 // 2], size=(224, 224), mode='bilinear',
+                                                      align_corners=True)
+                
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
+        part_cam_imgs = part_cam_imgs.view(batch * self.topN, 2, 224, 224)
+        part_cam_refined_imgs = part_cam_refined_imgs.view(batch * self.topN, 2, 224, 224)
+        B, C, H, W = part_cam_imgs.shape
+        mask_index = part_cam_imgs.reshape(B, C, -1).ge(torch.mean(part_cam_imgs.reshape(B, C, -1), dim = 2).unsqueeze(2))
         
-        mask = self.encoder(part_imgs.detach())
-        part_imgs = mask * part_imgs
-        _, part_rpn_features, part_features = self.pretrained_model(part_imgs.detach())
+        part_imgs_mask = torch.zeros_like(mask_index)
+        part_imgs_mask[mask_index] = 1
+        part_imgs_mask = part_imgs_mask.reshape(B, C, H, W)
+        part_imgs = part_imgs * part_imgs_mask[:, 1:, :]
+        
+        _, part_rpn_features, part_features, part_cam, part_cam_refined = self.pretrained_model(part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
         part_feature = part_feature.view(batch, -1)
@@ -93,21 +108,16 @@ class attention_net(nn.Module):
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
         
-        with torch.no_grad():
-            prf_mean = torch.mean(rpn_feature, dim = 1, keepdim = True)
-            prf_threshold = torch.mean(prf_mean.view(prf_mean.size(0), prf_mean.size(1), -1), dim = 2, keepdim = True).unsqueeze(3)
-            prf_mean = F.interpolate(prf_mean, size = (224, 224), mode = 'bilinear', align_corners = True)
-            prf_mask = (prf_mean > prf_threshold).float()
-            prf_mask = prf_mask.repeat_interleave(self.topN, dim = 0)
-        
         return [raw_logits,
                 concat_logits,
                 part_logits,
                 top_n_index,
                 top_n_prob,
                 part_imgs,
-                mask,
-                prf_mask]
+                part_cam_imgs,
+                part_cam_refined_imgs,
+                part_cam,
+                part_cam_refined]
 
 
 def list_loss(logits, targets):
