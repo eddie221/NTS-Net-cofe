@@ -110,7 +110,6 @@ class ResNet(nn.Module):
         
         self.conv1x1_2 = nn.Conv2d(512, 32, 1, bias = False)
         self.conv1x1_3 = nn.Conv2d(1024, 64, 1, bias = False)
-        self.conv1x1_4 = nn.Conv2d(2048, 128, 1, bias = False)
         self.conv1x1_cam = nn.Conv2d(2048, 2, 1, bias = False)
         self.dropout = nn.Dropout(p = 0.5)
         
@@ -142,13 +141,14 @@ class ResNet(nn.Module):
     def pcm_refined(self, cam, f):
         B, C, H, W = cam.shape
         f_flatten = f.contiguous().view(f.shape[0], f.shape[1], -1)
+        f_flatten = f_flatten / torch.norm(f_flatten, dim = 1, keepdim = True)
         f_cor = torch.matmul(f_flatten.transpose(1, 2), f_flatten)
+        f_cor = f_cor / (torch.sum(f_cor, dim = 1, keepdim = True) + 1e-5)
         cam = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
         cam_rv = torch.matmul(cam, f_cor).contiguous().view(B, C, H, W)
         return cam_rv
     
     def refined_cam(self, x2, x3, cam_f):
-        
         x2 = torch.nn.functional.interpolate(self.conv1x1_2(x2), size = x3.size(2), mode = 'bilinear', align_corners = True)
         x3 = self.conv1x1_3(x3)
         fuse_feature = torch.cat([x2, x3], dim = 1)
@@ -157,7 +157,6 @@ class ResNet(nn.Module):
         cam = torch.nn.functional.interpolate(cam , size = 224, mode = 'bilinear', align_corners = True)
         cam_refined = torch.nn.functional.interpolate(cam_refined , size = 224, mode = 'bilinear', align_corners = True)
         return cam, cam_refined
-        
         
     def forward(self, x):
         x = self.conv1(x)

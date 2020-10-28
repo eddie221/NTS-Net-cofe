@@ -92,7 +92,7 @@ class attention_net(nn.Module):
             mask_index = part_cam_imgs.reshape(B, C, -1).ge(torch.mean(part_cam_imgs.reshape(B, C, -1), dim = 2).unsqueeze(2))
         
             part_imgs_mask = torch.zeros_like(mask_index)
-            part_imgs_mask[mask_index] = 1
+            part_imgs_mask[mask_index] = 1.0
             part_imgs_mask = part_imgs_mask.reshape(B, C, H, W)
             part_imgs = part_imgs * part_imgs_mask[:, 1:, :]
         

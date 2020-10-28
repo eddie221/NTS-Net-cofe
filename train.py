@@ -59,6 +59,9 @@ for epoch in range(start_epoch, EPOCH + 1):
     # begin training
     _print('--' * 50)
     net.train()
+    train_loss = 0
+    train_correct = 0
+    total = 0
     for i, data in enumerate(trainloader):
         img, label = data[0].cuda(), data[1].cuda()
         batch_size = img.size(0)
@@ -75,10 +78,20 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        #loss_er = torch.mean(torch.abs(p_cam[:, 1, :, :] - cam[:, 1, :, :]))
+        loss_er1 = torch.mean(torch.abs(cam_rf[:, 1, :, :] - cam[:, 1, :, :]))
+        loss_er2 = torch.mean(torch.abs(p_cam_rf[:, 1, :, :] - p_cam[:, 1, :, :]))
+        loss_er = loss_er1 + loss_er2
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + loss_er * 0.01
         
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss# + loss_er
-            
+        # calculate loss
+        concat_loss = creterion(concat_logits, label)
+        # calculate accuracy
+        _, concat_predict = torch.max(concat_logits, 1)
+        total += batch_size
+        train_correct += torch.sum(concat_predict.data == label.data)
+        train_loss += concat_loss.item() * batch_size
+        #progress_bar(i, len(trainloader), 'eval train set')
+        
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
@@ -86,35 +99,47 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_optimizer.step()
         
         progress_bar(i, len(trainloader), 'train')
+    
+    train_acc = float(train_correct) / total
+    train_loss = train_loss / total
+    _print('epoch:{} - train loss: {:.6f} cls loss: {:.6f} er loss: {:.6f} and train acc: {:.6f} total sample: {}'.format(
+            epoch,
+            train_loss,
+            concat_loss,
+            loss_er,
+            train_acc,
+            total))
 
     if epoch % SAVE_FREQ == 0:
-        train_loss = 0
-        train_correct = 0
-        total = 0
-        net.eval()
-        for i, data in enumerate(trainloader):
-            with torch.no_grad():
-                img, label = data[0].cuda(), data[1].cuda()
-                batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
-                # calculate loss
-                concat_loss = creterion(concat_logits, label)
-                # calculate accuracy
-                _, concat_predict = torch.max(concat_logits, 1)
-                total += batch_size
-                train_correct += torch.sum(concat_predict.data == label.data)
-                train_loss += concat_loss.item() * batch_size
-                progress_bar(i, len(trainloader), 'eval train set')
-
-        train_acc = float(train_correct) / total
-        train_loss = train_loss / total
-
-        _print(
-            'epoch:{} - train loss: {:.6f} and train acc: {:.6f} total sample: {}'.format(
-                epoch,
-                train_loss,
-                train_acc,
-                total))
+# =============================================================================
+#         train_loss = 0
+#         train_correct = 0
+#         total = 0
+#         net.eval()
+#         for i, data in enumerate(trainloader):
+#             with torch.no_grad():
+#                 img, label = data[0].cuda(), data[1].cuda()
+#                 batch_size = img.size(0)
+#                 _, concat_logits, _, _, _, _, _, _, _, _ = net(img)
+#                 # calculate loss
+#                 concat_loss = creterion(concat_logits, label)
+#                 # calculate accuracy
+#                 _, concat_predict = torch.max(concat_logits, 1)
+#                 total += batch_size
+#                 train_correct += torch.sum(concat_predict.data == label.data)
+#                 train_loss += concat_loss.item() * batch_size
+#                 progress_bar(i, len(trainloader), 'eval train set')
+# 
+#         train_acc = float(train_correct) / total
+#         train_loss = train_loss / total
+# 
+#         _print(
+#             'epoch:{} - train loss: {:.6f} and train acc: {:.6f} total sample: {}'.format(
+#                 epoch,
+#                 train_loss,
+#                 train_acc,
+#                 total))
+# =============================================================================
 
 	# evaluate on test set
         test_loss = 0
