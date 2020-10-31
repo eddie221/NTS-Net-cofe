@@ -2,7 +2,7 @@ import torch.nn as nn
 import math
 import torch.utils.model_zoo as model_zoo
 import torch
-
+import core.cofe as cofe
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
            'resnet152']
@@ -107,12 +107,11 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-        
-# =============================================================================
-#         self.conv1x1_2 = nn.Conv2d(512, 32, 1, bias = False)
-#         self.conv1x1_3 = nn.Conv2d(1024, 64, 1, bias = False)
-# =============================================================================
+         
+        self.cofe = cofe.cofeature_fast(3, 1, 1)
+        self.conv1x1_3 = nn.Conv2d(1024, 128, 1, bias = False)
         self.conv1x1_cam = nn.Conv2d(2048, 2, 1, bias = False)
+        self.cofe_linear = nn.Linear(128 * 128 * 5, 1024)
         self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
@@ -140,8 +139,7 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
     
-    def pcm_refined(self, cam):
-        cam = self.conv1x1_cam(cam)
+    def feature_refined(self, cam):
         B, C, H, W = cam.shape
         cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
         cam_flatten = cam_flatten / torch.norm(cam_flatten, dim = 2, keepdim = True)
@@ -150,8 +148,6 @@ class ResNet(nn.Module):
         cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
         
         cam_refined = torch.matmul(cam_flatten.transpose(1, 2), cam_cor).transpose(1, 2).contiguous().view(B, C, H, W)
-        cam_refined = torch.nn.functional.interpolate(cam_refined, size = 224, mode = 'bilinear', align_corners = True)
-        cam = torch.nn.functional.interpolate(cam, size = 224, mode = 'bilinear', align_corners = True)
         return cam, cam_refined
     
 # =============================================================================
@@ -175,17 +171,22 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
+        _, x3 = self.feature_refined(self.conv1x1_3(x))
+        x3 = self.cofe(x3)
+        x3 = x3.contiguous().view(x3.shape[0], -1)
+        x3 = self.cofe_linear(x3)
+        
         x = self.layer4(x)
         feature1 = x
-        cam, cam_refined = self.pcm_refined(feature1)
         
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
+        x = torch.cat([x, x3], dim = 1)
         feature2 = x
         x = self.dropout(x)
         x = self.fc(x)
 
-        return x, feature1, feature2, cam, cam_refined
+        return x, feature1, feature2
 
 def resnet18(pretrained=False, **kwargs):
     """Constructs a ResNet-18 model.

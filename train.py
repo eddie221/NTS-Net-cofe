@@ -69,7 +69,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
-        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img, cam, cam_refined = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, part_img = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -78,9 +78,7 @@ for epoch in range(start_epoch, EPOCH + 1):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         
-        loss_er = torch.mean(torch.abs(cam[:, 1:, :, :] - cam_refined[:, 1:, :, :]))
-        
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + loss_er * 0.1
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss
             
         # calculate loss
         concat_loss = creterion(concat_logits, label)
@@ -101,13 +99,11 @@ for epoch in range(start_epoch, EPOCH + 1):
     
     train_acc = float(train_correct) / total
     train_loss = train_loss / total
-    _print('epoch:{} - train loss: {:.6f} cls loss: {:.6f} er loss: {:.6f} and train acc: {:.6f} total sample: {}'.format(
-            epoch,
-            train_loss,
-            concat_loss,
-            loss_er,
-            train_acc,
-            total))
+    _print('epoch:{} - test loss: {:.6f} and test acc: {:.6f} total sample: {}'.format(
+                epoch,
+                train_loss,
+                train_acc,
+                total))
 
     if epoch % SAVE_FREQ == 0:
 # =============================================================================
@@ -148,7 +144,7 @@ for epoch in range(start_epoch, EPOCH + 1):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _ = net(img)
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
