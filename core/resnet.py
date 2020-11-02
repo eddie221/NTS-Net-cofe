@@ -107,11 +107,12 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-         
-        self.cofe = cofe.cofeature_fast(3, 1, 1)
+        
         self.conv1x1_3 = nn.Conv2d(1024, 128, 1, bias = False)
-        self.conv1x1_cam = nn.Conv2d(2048, 2, 1, bias = False)
+        self.reflect_pad = nn.ReflectionPad2d(1)
+        self.cofe = cofe.cofeature_fast(3, 1, 1)
         self.cofe_linear = nn.Linear(128 * 128 * 5, 1024)
+         
         self.dropout = nn.Dropout(p = 0.5)
         
         for m in self.modules():
@@ -144,6 +145,7 @@ class ResNet(nn.Module):
         cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
         cam_flatten = cam_flatten / torch.norm(cam_flatten, dim = 2, keepdim = True)
         cam_cor = torch.matmul(cam_flatten, cam_flatten.transpose(1, 2))
+        cam_cor = self.relu(cam_cor)
         cam_cor = cam_cor / (torch.sum(cam_cor, dim = 1, keepdim = True) + 1e-5)
         cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
         
@@ -172,6 +174,7 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         _, x3 = self.feature_refined(self.conv1x1_3(x))
+        x3 = self.reflect_pad(x3)
         x3 = self.cofe(x3)
         x3 = x3.contiguous().view(x3.shape[0], -1)
         x3 = self.cofe_linear(x3)
