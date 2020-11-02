@@ -108,7 +108,10 @@ class ResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         
+        self.conv1x1_2 = nn.Conv2d(512, 64, 1, bias = False)
         self.conv1x1_3 = nn.Conv2d(1024, 128, 1, bias = False)
+        self.conv1x1_4 = nn.Conv2d(2048, 256, 1, bias = False)
+        self.conv1x1_fuse = nn.Conv2d(64 + 128 + 256, 128, 1, bias = False)
         self.reflect_pad = nn.ReflectionPad2d(1)
         self.cofe = cofe.cofeature_fast(3, 1, 1)
         self.cofe_linear = nn.Linear(128 * 128 * 5, 1024)
@@ -172,19 +175,24 @@ class ResNet(nn.Module):
 
         x = self.layer1(x)
         x = self.layer2(x)
+        _, x2 = self.feature_refined(self.conv1x1_2(x))
         x = self.layer3(x)
         _, x3 = self.feature_refined(self.conv1x1_3(x))
-        x3 = self.reflect_pad(x3)
-        x3 = self.cofe(x3)
-        x3 = x3.contiguous().view(x3.shape[0], -1)
-        x3 = self.cofe_linear(x3)
-        
         x = self.layer4(x)
+        _, x4 = self.feature_refined(self.conv1x1_4(x))
+        x2 = torch.nn.functional.interpolate(x2, size = x3.shape[2], mode = 'bilinear', align_corners = True)
+        x4 = torch.nn.functional.interpolate(x4, size = x3.shape[2], mode = 'bilinear', align_corners = True)
+        
+        x_fuse = self.reflect_pad(self.conv1x1_fuse(torch.cat([x2, x3, x4], dim = 1)))
+        x_cofe = self.cofe(x_fuse)
+        x_cofe = x_cofe.contiguous().view(x_cofe.shape[0], -1)
+        x_cofe = self.cofe_linear(x_cofe)
+        
         feature1 = x
         
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
-        x = torch.cat([x, x3], dim = 1)
+        x = torch.cat([x, x_cofe], dim = 1)
         feature2 = x
         x = self.dropout(x)
         x = self.fc(x)

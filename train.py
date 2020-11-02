@@ -49,6 +49,7 @@ net = net.cuda()
 net = DataParallel(net)
 
 for epoch in range(start_epoch, 500):
+    print("save_dir : {}".format(save_dir))
     # begin training
     _print('--' * 50)
     net.train()
