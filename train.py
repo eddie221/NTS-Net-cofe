@@ -63,6 +63,8 @@ for epoch in range(EPOCH):
         part_optimizer.zero_grad()
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
+        cam_label = torch.tensor([[0, 1]]).repeat(img.shape[0], 1).unsqueeze(2).unsqueeze(3).cuda()
+        
 
         raw_logits, concat_logits, part_logits, _, top_n_prob, cam, cam_rf = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
@@ -73,8 +75,9 @@ for epoch in range(EPOCH):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         er_loss = torch.mean(torch.abs(cam[:, 1:, :, :] - cam_rf[:, 1:, :, :]))
+        cls_loss = torch.nn.functional.multilabel_soft_margin_loss(cam_rf, cam_label)
 
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + er_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + er_loss + cls_loss
         
         total_loss.backward()
         raw_optimizer.step()
