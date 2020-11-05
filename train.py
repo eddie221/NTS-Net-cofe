@@ -3,7 +3,7 @@ import torch.utils.data
 from torch.nn import DataParallel
 from datetime import datetime
 from torch.optim.lr_scheduler import MultiStepLR
-from config import BATCH_SIZE, PROPOSAL_NUM, SAVE_FREQ, LR, WD, resume, save_dir
+from config import BATCH_SIZE, PROPOSAL_NUM, SAVE_FREQ, LR, WD, resume, save_dir, EPOCH
 from core import model, dataset
 from core.utils import init_log, progress_bar
 
@@ -47,8 +47,8 @@ schedulers = [MultiStepLR(raw_optimizer, milestones=[60, 100], gamma=0.1),
               MultiStepLR(partcls_optimizer, milestones=[60, 100], gamma=0.1)]
 net = net.cuda()
 net = DataParallel(net)
-
-for epoch in range(start_epoch, 500):
+VAL_MAX_ACC = 0
+for epoch in range(EPOCH):
     print("save_dir : {}".format(save_dir))
     # begin training
     _print('--' * 50)
@@ -64,7 +64,7 @@ for epoch in range(start_epoch, 500):
         concat_optimizer.zero_grad()
         partcls_optimizer.zero_grad()
 
-        raw_logits, concat_logits, part_logits, _, top_n_prob = net(img)
+        raw_logits, concat_logits, part_logits, _, top_n_prob, cam, cam_rf = net(img)
         part_loss = model.list_loss(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                     label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1)).view(batch_size, PROPOSAL_NUM)
         raw_loss = creterion(raw_logits, label)
@@ -72,8 +72,10 @@ for epoch in range(start_epoch, 500):
         rank_loss = model.ranking_loss(top_n_prob, part_loss)
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
+        er_loss = torch.mean(torch.abs(cam[:, 1:, :, :] - cam_rf[:, 1:, :, :]))
 
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + er_loss
+        
         total_loss.backward()
         raw_optimizer.step()
         part_optimizer.step()
@@ -112,11 +114,13 @@ for epoch in range(start_epoch, 500):
             with torch.no_grad():
                 img, label = data[0].cuda(), data[1].cuda()
                 batch_size = img.size(0)
-                _, concat_logits, _, _, _ = net(img)
+                _, concat_logits, _, _, _, _, _ = net(img)
+                
                 # calculate loss
                 concat_loss = creterion(concat_logits, label)
                 # calculate accuracy
                 _, concat_predict = torch.max(concat_logits, 1)
+                
                 total += batch_size
                 test_correct += torch.sum(concat_predict.data == label.data)
                 test_loss += concat_loss.item() * batch_size
@@ -132,16 +136,17 @@ for epoch in range(start_epoch, 500):
                 total))
         
         # save model
-        net_state_dict = net.module.state_dict()
-        if not os.path.exists(save_dir):
-            os.mkdir(save_dir)
-        torch.save({
-            'epoch': epoch,
-            'train_loss': train_loss,
-            'train_acc': train_acc,
-            'test_loss': test_loss,
-            'test_acc': test_acc,
-            'net_state_dict': net_state_dict},
-            os.path.join(save_dir, '%03d.ckpt' % epoch))
+        if test_acc > VAL_MAX_ACC or epoch == EPOCH:
+            net_state_dict = net.module.state_dict()
+            if not os.path.exists(save_dir):
+                os.mkdir(save_dir)
+            torch.save({
+                'epoch': epoch,
+                'train_loss': train_loss,
+                'train_acc': train_acc,
+                'test_loss': test_loss,
+                'test_acc': test_acc,
+                'net_state_dict': net_state_dict},
+                os.path.join(save_dir, '{}_{:.3f}.ckpt'.format(epoch, test_acc)))
 
 print('finishing training')

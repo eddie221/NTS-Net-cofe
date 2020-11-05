@@ -35,17 +35,21 @@ class attention_net(nn.Module):
         super(attention_net, self).__init__()
         self.pretrained_model = resnet.resnet50(pretrained=True)
         self.pretrained_model.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.pretrained_model.fc = nn.Linear(512 * 4 + 1024, 200)
+        self.pretrained_model.fc = nn.Linear(512 * 4, 200)
         self.proposal_net = ProposalNet()
         self.topN = topN
-        self.concat_net = nn.Linear((2048 + 1024) * (CAT_NUM + 1), 200)
-        self.partcls_net = nn.Linear(512 * 4 + 1024, 200)
+        self.concat_net = nn.Linear((2048) * (CAT_NUM + 1), 200)
+        self.partcls_net = nn.Linear(512 * 4, 200)
         _, edge_anchors, _ = generate_default_anchor_maps()
         self.pad_side = 224
         self.edge_anchors = (edge_anchors + 224).astype(np.int)
 
     def forward(self, x):
-        resnet_out, rpn_feature, feature = self.pretrained_model(x)
+        resnet_out, rpn_feature, feature, cam, cam_rf = self.pretrained_model(x)
+        cam = F.interpolate(cam, size = x.shape[2], mode = 'bilinear', align_corners = True)
+        cam_rf = F.interpolate(cam_rf, size = x.shape[2], mode = 'bilinear', align_corners = True)
+        with torch.no_grad():
+            x = x * torch.where(cam > 0.5, torch.tensor(1.0).cuda(), torch.tensor(0.0).cuda())[:, 1:, :, :]
         x_pad = F.pad(x, (self.pad_side, self.pad_side, self.pad_side, self.pad_side), mode='constant', value=0)
         batch = x.size(0)
         # we will reshape rpn to shape: batch * nb_anchor
@@ -67,7 +71,7 @@ class attention_net(nn.Module):
                 part_imgs[i:i + 1, j] = F.interpolate(x_pad[i:i + 1, :, y0:y1, x0:x1], size=(224, 224), mode='bilinear',
                                                       align_corners=True)
         part_imgs = part_imgs.view(batch * self.topN, 3, 224, 224)
-        _, _, part_features = self.pretrained_model(part_imgs.detach())
+        _, _, part_features, _, _ = self.pretrained_model(part_imgs.detach())
         part_feature = part_features.view(batch, self.topN, -1)
         part_feature = part_feature[:, :CAT_NUM, ...].contiguous()
         part_feature = part_feature.view(batch, -1)
@@ -77,7 +81,7 @@ class attention_net(nn.Module):
         raw_logits = resnet_out
         # part_logits have the shape: B*N*200
         part_logits = self.partcls_net(part_features).view(batch, self.topN, -1)
-        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob]
+        return [raw_logits, concat_logits, part_logits, top_n_index, top_n_prob, cam, cam_rf]
 
 
 def list_loss(logits, targets):
