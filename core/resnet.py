@@ -142,16 +142,15 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
     
     def feature_refined(self, cam):
-        with torch.no_grad():
-            B, C, H, W = cam.shape
-            cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
-            cam_flatten = cam_flatten / torch.norm(cam_flatten, dim = 2, keepdim = True)
-            cam_cor = torch.matmul(cam_flatten, cam_flatten.transpose(1, 2))
-            cam_cor = self.relu(cam_cor)
-            cam_cor = cam_cor / (torch.sum(cam_cor, dim = 1, keepdim = True) + 1e-5)
-            cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
-            
-            cam_refined = torch.matmul(cam_flatten.transpose(1, 2), cam_cor).transpose(1, 2).contiguous().view(B, C, H, W)
+        B, C, H, W = cam.shape
+        cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
+        cam_flatten = cam_flatten / torch.norm(cam_flatten, dim = 2, keepdim = True)
+        cam_cor = torch.matmul(cam_flatten, cam_flatten.transpose(1, 2))
+        cam_cor = self.relu(cam_cor)
+        cam_cor = cam_cor / (torch.sum(cam_cor, dim = 1, keepdim = True) + 1e-5)
+        cam_flatten = cam.contiguous().view(cam.shape[0], cam.shape[1], -1)
+        
+        cam_refined = torch.matmul(cam_flatten.transpose(1, 2), cam_cor).transpose(1, 2).contiguous().view(B, C, H, W)
         return cam_refined
     
     def forward(self, x):

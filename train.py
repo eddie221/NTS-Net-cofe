@@ -75,9 +75,8 @@ for epoch in range(EPOCH):
         partcls_loss = creterion(part_logits.view(batch_size * PROPOSAL_NUM, -1),
                                  label.unsqueeze(1).repeat(1, PROPOSAL_NUM).view(-1))
         er_loss = torch.mean(torch.abs(cam[:, 1:, :, :] - cam_rf[:, 1:, :, :]))
-        cls_loss = torch.nn.functional.multilabel_soft_margin_loss(cam_rf, cam_label)
 
-        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + er_loss + cls_loss
+        total_loss = raw_loss + rank_loss + concat_loss + partcls_loss + er_loss
         
         total_loss.backward()
         raw_optimizer.step()
