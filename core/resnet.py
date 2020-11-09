@@ -170,9 +170,12 @@ class ResNet(nn.Module):
         x2 = torch.nn.functional.interpolate(x2, size = x3.shape[2], mode = 'bilinear', align_corners = True)
         x4 = torch.nn.functional.interpolate(x4, size = x3.shape[2], mode = 'bilinear', align_corners = True)
         
-        x_fuse = self.conv1x1_fuse(torch.cat([x2, x3, x4], dim = 1))
+        x_fuse = torch.cat([x2, x3, x4], dim = 1)
         x_fuse = self.instance_norm(x_fuse)
         x_fuse_refine = self.feature_refined(x_fuse)
+        x_fuse = self.conv1x1_fuse(x_fuse)
+        x_fuse_refine = self.conv1x1_fuse(x_fuse_refine)
+        
         
         feature1 = x
         
